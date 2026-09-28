@@ -1,0 +1,3 @@
+# Optional extra feeds, one URL per line.
+# Tip: create Google Alerts (google.com/alerts) for terms like "borehole tender Nigeria",
+# set "Deliver to: RSS feed", and paste each feed URL here.
