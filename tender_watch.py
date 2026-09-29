@@ -24,7 +24,7 @@ SEEN_FILE = ROOT / "seen.json"
 FEEDS_FILE = ROOT / "feeds.txt"
 UA = {"User-Agent": "Mozilla/5.0 (compatible; BistarTenderWatch/2.0)"}
 MAX_AGE_DAYS = 30
-MIN_SCORE = 3
+MIN_SCORE = 4
 MAX_NIGERIA = 50
 MAX_INTERNATIONAL = 10
 
@@ -127,7 +127,7 @@ def hit(term, text):
 
 def analyse(text):
     t = text.lower()
-    if any(hit(x, t) for x in EXCLUDE) or not any(hit(x, t) for x in NOTICE):
+    if any(hit(x, t) for x in EXCLUDE):
         return None
     cats = {}
     for name, (terms, weight) in CATEGORIES.items():
@@ -136,11 +136,18 @@ def analyse(text):
             cats[name] = (weight, found)
     if not cats:
         return None
+    notice = any(hit(x, t) for x in NOTICE)
     nb = [b for b in NIG_BUYERS if hit(b, t)]
     ib = [b for b in INTL_BUYERS if hit(b, t)]
     nig = [g for g in NIGERIA if hit(g, t)]
     other = [g for g in OTHER if hit(g, t)]
-    score = min(sum(w for w, _ in cats.values()), 6) + (2 if nb or ib else 0) + (1 if nig or nb else 0)
+    # A notice word is the strongest signal but not required: plain news coverage of a
+    # real project (e.g. "NDDC awards road contract") still matters to Bistar, so a strong
+    # category match plus a named buyer or a Nigerian location can qualify it on its own.
+    score = (min(sum(w for w, _ in cats.values()), 6) + (3 if notice else 0)
+             + (2 if nb or ib else 0) + (1 if nig or nb else 0))
+    if not notice and not (nb or ib) and not nig:
+        return None   # generic mention with no notice word, no named buyer, no Nigerian place
     if score < MIN_SCORE:
         return None
     primary = max(cats, key=lambda c: (cats[c][0], len(cats[c][1])))
@@ -352,38 +359,22 @@ def main():
     seen = load_seen()
     items, errors, ok = collect()
     new, batch, today = [], set(), datetime.now()
-    no_notice_word = irrelevant = already_sent = expired = 0
-    sample_titles = []
     for it in items:
         text = it["title"] + " " + it["summary"]
-        if len(sample_titles) < 8 and it["title"]:
-            sample_titles.append(it["title"])
         a = analyse(text)
         if not a:
-            t = text.lower()
-            if not any(hit(x, t) for x in NOTICE):
-                no_notice_word += 1
-            else:
-                irrelevant += 1
             continue
         iid = item_id(it["title"])
         if iid in seen or iid in batch:
-            already_sent += 1
             continue
         m = DEADLINE.search(text)
         dl = m.group(1) if m else ""
         d = parse_date(dl) if dl else None
         if d and d.date() < today.date():
-            expired += 1
             continue   # closing date already passed
         batch.add(iid)
         it.update(a, id=iid, deadline=dl)
         new.append(it)
-    print(f"DEBUG: {len(items)} raw items | no notice-word: {no_notice_word} | "
-          f"off-topic: {irrelevant} | already sent: {already_sent} | expired: {expired}")
-    print("DEBUG sample titles seen:")
-    for s in sample_titles:
-        print("  -", s)
 
     def order(x):
         return (-x["score"], x["published"] is None, -(x["published"].timestamp() if x["published"] else 0))
