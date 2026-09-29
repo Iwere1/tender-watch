@@ -352,22 +352,38 @@ def main():
     seen = load_seen()
     items, errors, ok = collect()
     new, batch, today = [], set(), datetime.now()
+    no_notice_word = irrelevant = already_sent = expired = 0
+    sample_titles = []
     for it in items:
         text = it["title"] + " " + it["summary"]
+        if len(sample_titles) < 8 and it["title"]:
+            sample_titles.append(it["title"])
         a = analyse(text)
         if not a:
+            t = text.lower()
+            if not any(hit(x, t) for x in NOTICE):
+                no_notice_word += 1
+            else:
+                irrelevant += 1
             continue
         iid = item_id(it["title"])
         if iid in seen or iid in batch:
+            already_sent += 1
             continue
         m = DEADLINE.search(text)
         dl = m.group(1) if m else ""
         d = parse_date(dl) if dl else None
         if d and d.date() < today.date():
+            expired += 1
             continue   # closing date already passed
         batch.add(iid)
         it.update(a, id=iid, deadline=dl)
         new.append(it)
+    print(f"DEBUG: {len(items)} raw items | no notice-word: {no_notice_word} | "
+          f"off-topic: {irrelevant} | already sent: {already_sent} | expired: {expired}")
+    print("DEBUG sample titles seen:")
+    for s in sample_titles:
+        print("  -", s)
 
     def order(x):
         return (-x["score"], x["published"] is None, -(x["published"].timestamp() if x["published"] else 0))
