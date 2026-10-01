@@ -101,10 +101,16 @@ SEARCH_QUERIES = [
     # remediation
     "oil spill remediation tender Nigeria", "HYPREP contractors remediation",
     "land remediation EOI Niger Delta", "contaminated site clean-up tender Nigeria",
-    # oil companies and agencies
-    "NNPC tender civil works", "NLNG tender contractors", "Shell SPDC contractors prequalification",
-    "TotalEnergies Nigeria tender contractors", "Chevron Nigeria contractors tender",
-    "Renaissance Africa Energy tender", "Seplat tender contractors", "NCDMB tender notice",
+    # oil companies and agencies (public and private)
+    "NNPC tender civil works", "NUPRC marginal field bid round", "NLNG tender contractors",
+    "Shell SPDC contractors prequalification", "TotalEnergies Nigeria tender contractors",
+    "Chevron Nigeria contractors tender", "Renaissance Africa Energy tender",
+    "Seplat tender contractors", "Oando tender contractors Nigeria", "NCDMB tender notice",
+    "Nigerian oil and gas contractor prequalification",
+    # government and parastatals
+    "Federal Government of Nigeria invitation to tender", "Bureau of Public Procurement tender Nigeria",
+    "state government Nigeria invitation to bid contractors", "parastatal Nigeria tender contractors",
+    "BPE Nigeria privatisation bid", "ICRC PPP Nigeria bid",
     # outside Nigeria
     "Ghana borehole tender", "Ghana road construction tender", "Ghana civil works EOI",
 ]
@@ -112,6 +118,7 @@ PAGES = [   # portal pages scanned for tender-looking links; failures are report
     "https://nipexng.com/", "https://www.bpp.gov.ng/", "https://ncdmb.gov.ng/",
     "https://nddc.gov.ng/", "https://www.nigerialng.com/",
     "https://www.dgmarket.com/tenders/list.do?countryCode=NG",
+    "https://nocopo.bpp.gov.ng/", "https://nuprc.gov.ng/",
 ]
 WORLD_BANK = ("https://search.worldbank.org/api/v2/procnotices?format=json&rows=100"
               "&countryshortname_exact=Nigeria&srt=submission_date&order=desc")
@@ -220,14 +227,22 @@ def from_page(url):
 
 
 def from_worldbank():
+    # The API's country filter is unreliable in practice (it has returned notices for
+    # India, Ethiopia and Nepal even when asked for Nigeria only), so every notice is
+    # re-checked here against its own "country" field before being kept.
     out = []
     for n in get(WORLD_BANK).json().get("procnotices", []):
+        country = n.get("country") or n.get("countryname") or n.get("country_name") or n.get("countryshortname") or ""
+        if isinstance(country, list):
+            country = " ".join(str(c) for c in country)
+        if "nigeria" not in str(country).lower():
+            continue
         title = n.get("bid_description") or n.get("project_name") or ""
-        out.append(dict(title=clean(title, 300) + " (World Bank, Nigeria)",
+        out.append(dict(title=clean(title, 300) + " (World Bank)",
                         link="https://projects.worldbank.org/en/projects-operations/procurement-detail/"
                              + str(n.get("id", "")),
-                        source="World Bank", published=None,
-                        summary=clean(f"{n.get('notice_type','')} {n.get('project_name','')} "
+                        source="World Bank", published=None, trusted=False,
+                        summary=clean(f"Nigeria. {n.get('notice_type','')} {n.get('project_name','')} "
                                       f"deadline {n.get('submission_deadline_date','')}")))
     return out
 
@@ -378,9 +393,20 @@ def main():
 
     def order(x):
         return (-x["score"], x["published"] is None, -(x["published"].timestamp() if x["published"] else 0))
-    ngr = sorted([i for i in new if not i["international"]], key=order)[:MAX_NIGERIA]
+    ngr = sorted([i for i in new if not i["international"]], key=order)
     intl = sorted([i for i in new if i["international"]], key=order)[:MAX_INTERNATIONAL]
-    new = ngr + intl
+    # World Bank notices are a long, generic list; cap them so they cannot crowd out
+    # named-buyer and oil-and-gas matches, which are the more directly relevant ones.
+    wb_cap, out, wb_used = 4, [], 0
+    for it in ngr:
+        if it["source"] == "World Bank":
+            if wb_used >= wb_cap:
+                continue
+            wb_used += 1
+        out.append(it)
+        if len(out) >= MAX_NIGERIA:
+            break
+    new = out + intl
 
     print(f"{ok} sources ok, {len(errors)} failed, {len(new)} new matches")
     if args.dry:
