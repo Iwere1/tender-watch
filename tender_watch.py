@@ -444,17 +444,8 @@ def main():
         now = datetime.now(timezone.utc).isoformat()
         for it in new:
             seen[it["id"]] = now
-    else:
-        # Always confirm the scan ran, even with nothing new, so a quiet week is never
-        # mistaken for a broken system.
-        day = datetime.now().strftime("%d %B %Y")
-        body = (f"Good morning,\n\nToday's scan ({day}) checked {ok} sources and found no new tenders, "
-                "EOIs or bids matching Bistar's work that hadn't already been sent. This can simply mean "
-                "it was a quiet week.\n\nKind regards,\nBistar Tender Watch")
-        if errors:
-            body += "\n\nA few sources could not be reached: " + "; ".join(errors[:8]) + "."
-        send(f"Tender Watch: no new opportunities this week ({day})",
-             "<p>" + body.replace("\n\n", "</p><p>").replace("\n", "<br>") + "</p>", body)
+    # No "else" branch here on purpose: if nothing new matches Bistar's work, no email
+    # goes out at all. A quiet week stays quiet.
     cutoff = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
     SEEN_FILE.write_text(json.dumps({k: v for k, v in seen.items() if v > cutoff}, indent=0))
 
