@@ -47,7 +47,9 @@ CATEGORIES = {
         "housing estate", "construction of estate", "construction of houses", "building works",
         "renovation", "remodelling", "remodeling", "fit-out", "construction of complex",
         "construction of hotel", "construction of mall", "construction of market",
-        "administrative block", "construction of block"], 3),
+        "administrative block", "construction of block", "warehouse", "factory construction",
+        "plant construction", "industrial facility", "construction of factory",
+        "construction of warehouse", "construction of plant"], 3),
     "Oil spill and land remediation": (["remediation", "oil spill", "spill response", "spill clean",
         "clean-up", "cleanup", "clean up", "contaminated site", "contaminated land",
         "hydrocarbon pollution", "hydrocarbon impacted", "hydrocarbon-impacted", "bioremediation",
@@ -57,7 +59,8 @@ CATEGORIES = {
         "flow station", "tank farm", "facility civil", "camp construction", "site clearing",
         "jetty", "slipway", "lease road"], 3),
     "General construction works": (["construction of", "rehabilitation of", "reconstruction of",
-        "engineering works", "civil and structural", "structural works", "maintenance works"], 1),
+        "engineering works", "civil and structural", "structural works", "maintenance works",
+        "expansion of", "extension of", "upgrade of", "upgrading of", "expansion works"], 1),
 }
 CATEGORY_ORDER = list(CATEGORIES)
 
@@ -71,7 +74,16 @@ NIG_BUYERS = ["nddc", "nnpc", "nlng", "ncdmb", "hyprep", "nosdra", "shell", "spd
               "totalenergies", "total energies", "chevron", "renaissance", "seplat", "agip", "naoc",
               "exxonmobil", "oando", "addax", "sahara energy", "first e&p", "aiteo", "waltersmith",
               "ministry of works", "ministry of water resources", "ruwassa", "federal government",
-              "state government", "nigerian ports", "nimasa", "fct"]
+              "state government", "nigerian ports", "nimasa", "fct",
+              # large industrial / manufacturing conglomerates that commission construction,
+              # water and facility works
+              "dangote", "bua group", "bua cement", "flour mills", "nestle nigeria",
+              "unilever nigeria", "nigerian breweries", "lafarge africa", "indorama",
+              "notore chemical", "wacot", "olam nigeria", "honeywell flour", "cadbury nigeria",
+              "nascon", "promasidor",
+              # property, estates and other oil-service firms that regularly go out to bid
+              "estate", "housing scheme", "real estate development", "property development",
+              "oilfield services", "drilling company", "epc contractor", "fabrication yard"]
 INTL_BUYERS = ["unicef", "undp", "fao", "world bank", "african development bank", "afdb", "usaid", "ungm"]
 NIGERIA = ["nigeria", "niger delta", "port harcourt", "rivers state", "bayelsa", "delta state",
            "akwa ibom", "cross river", "edo state", "imo state", "abia", "anambra", "enugu", "lagos",
@@ -111,6 +123,13 @@ SEARCH_QUERIES = [
     "Federal Government of Nigeria invitation to tender", "Bureau of Public Procurement tender Nigeria",
     "state government Nigeria invitation to bid contractors", "parastatal Nigeria tender contractors",
     "BPE Nigeria privatisation bid", "ICRC PPP Nigeria bid",
+    # large industrial and manufacturing conglomerates
+    "Dangote Group tender contractors", "BUA Group tender contractors",
+    "Flour Mills Nigeria tender contractors", "Nigerian Breweries tender contractors",
+    "Lafarge Africa tender contractors Nigeria", "industrial facility construction tender Nigeria",
+    # property, estates and oilfield service firms
+    "estate developer Nigeria construction tender", "housing estate construction invitation Nigeria",
+    "oilfield services company tender Nigeria contractors",
     # outside Nigeria
     "Ghana borehole tender", "Ghana road construction tender", "Ghana civil works EOI",
 ]
@@ -425,6 +444,17 @@ def main():
         now = datetime.now(timezone.utc).isoformat()
         for it in new:
             seen[it["id"]] = now
+    else:
+        # Always confirm the scan ran, even with nothing new, so a quiet week is never
+        # mistaken for a broken system.
+        day = datetime.now().strftime("%d %B %Y")
+        body = (f"Good morning,\n\nToday's scan ({day}) checked {ok} sources and found no new tenders, "
+                "EOIs or bids matching Bistar's work that hadn't already been sent. This can simply mean "
+                "it was a quiet week.\n\nKind regards,\nBistar Tender Watch")
+        if errors:
+            body += "\n\nA few sources could not be reached: " + "; ".join(errors[:8]) + "."
+        send(f"Tender Watch: no new opportunities this week ({day})",
+             "<p>" + body.replace("\n\n", "</p><p>").replace("\n", "<br>") + "</p>", body)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
     SEEN_FILE.write_text(json.dumps({k: v for k, v in seen.items() if v > cutoff}, indent=0))
 
